@@ -1,5 +1,5 @@
 import os
-from flask import Flask, redirect, url_for
+from flask import Flask, redirect, url_for, request
 from extensions import db, login_mgr, bcrypt, socketio
 from routes.auth import auth_bp
 from routes.chat import chat_bp
@@ -38,6 +38,14 @@ def create_app():
     @app.route("/")
     def index():
         return redirect(url_for("auth.login"))
+
+    # sw.js に "/" スコープを許可するヘッダーを付与
+    @app.after_request
+    def add_sw_header(response):
+        if "/static/sw.js" in response.headers.get("Content-Location", "") or \
+           request.path == "/static/sw.js":
+            response.headers["Service-Worker-Allowed"] = "/"
+        return response
 
     with app.app_context():
         db.create_all()
