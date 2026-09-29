@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ユーザー管理 — FreeChat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a1a1a; color: #eee; font-family: sans-serif; padding: 20px; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  h1 { font-size: 1.3rem; }
+  .logout { color: #aaa; text-decoration: none; font-size: .9rem; }
+  .logout:hover { color: #fff; }
+  .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: .9rem; }
+  .msg.success { background: #1a3a1a; color: #8f8; }
+  .msg.error   { background: #5c1a1a; color: #f88; }
+  .stats { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat { background: #2a2a2a; border-radius: 10px; padding: 16px 24px; text-align: center; }
+  .stat__num  { font-size: 2rem; font-weight: bold; color: #4caf50; }
+  .stat__label{ font-size: .8rem; color: #aaa; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: #2a2a2a; border-radius: 10px; overflow: hidden; }
+  th { background: #333; padding: 12px 16px; text-align: left; font-size: .85rem; color: #aaa; }
+  td { padding: 12px 16px; border-top: 1px solid #333; font-size: .9rem; vertical-align: middle; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: .75rem; }
+  .badge.admin { background: #4caf50; color: #fff; }
+  .badge.user  { background: #444; color: #aaa; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn { padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: .85rem; }
+  .btn-del  { background: #c0392b; color: #fff; }
+  .btn-del:hover { background: #a93226; }
+  .btn-reset { background: #2980b9; color: #fff; }
+  .btn-reset:hover { background: #2471a3; }
+  input.new-pass { padding: 6px 10px; border-radius: 6px; border: none;
+                   background: #333; color: #eee; font-size: .85rem; width: 130px; }
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
+              align-items: center; justify-content: center; z-index: 100; }
+  .modal-bg.show { display: flex; }
+  .modal { background: #2a2a2a; border-radius: 12px; padding: 28px; width: 100%; max-width: 340px; }
+  .modal h2 { margin-bottom: 16px; font-size: 1.1rem; }
+  .modal p  { color: #aaa; font-size: .9rem; margin-bottom: 20px; }
+  .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>👥 ユーザー管理</h1>
+  <a class="logout" href="{{ url_for('admin.logout') }}">ログアウト</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="msg {{ cat }}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- 統計 -->
+<div class="stats">
+  <div class="stat">
+    <div class="stat__num">{{ users|length }}</div>
+    <div class="stat__label">総ユーザー数</div>
+  </div>
+</div>
+
+<!-- ユーザーテーブル -->
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>ニックネーム</th>
+      <th>ユーザーID</th>
+      <th>権限</th>
+      <th>登録日</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td>{{ u.nickname }}</td>
+      <td>{{ u.user_id }}</td>
+      <td><span class="badge {{ 'admin' if u.is_admin else 'user' }}">{{ '管理者' if u.is_admin else '一般' }}</span></td>
+      <td>{{ u.created_at.strftime('%Y/%m/%d') }}</td>
+      <td>
+        <div class="actions">
+          <!-- パスワードリセット -->
+          <form method="POST" action="{{ url_for('admin.reset_password', user_id=u.id) }}"
+                style="display:flex;gap:6px;align-items:center;">
+            <input class="new-pass" type="password" name="new_password" placeholder="新パスワード" required>
+            <button class="btn btn-reset" type="submit">リセット</button>
+          </form>
+          <!-- 削除ボタン -->
+          <button class="btn btn-del" onclick="confirmDelete({{ u.id }}, '{{ u.nickname }}')">削除</button>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- 削除確認モーダル -->
+<div class="modal-bg" id="delModal">
+  <div class="modal">
+    <h2>⚠️ ユーザー削除</h2>
+    <p id="delMsg"></p>
+    <div class="modal-btns">
+      <button class="btn" style="background:#444;color:#eee;" onclick="closeModal()">キャンセル</button>
+      <form id="delForm" method="POST">
+        <button class="btn btn-del" type="submit">削除する</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function confirmDelete(id, name) {
+  document.getElementById('delMsg').textContent = `「${name}」を削除します。この操作は取り消せません。`;
+  document.getElementById('delForm').action = `/admin/users/${id}/delete`;
+  document.getElementById('delModal').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('delModal').classList.remove('show');
+}
+</script>
+</body>
+</html>

@@ -14,6 +14,7 @@ class User(UserMixin, db.Model):
     nickname = db.Column(db.String(30), nullable=False)
     user_id  = db.Column(db.String(30), unique=True, nullable=False)   # ログインID
     password = db.Column(db.String(255), nullable=False)               # bcryptハッシュ
+    is_admin   = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # 送信メッセージ

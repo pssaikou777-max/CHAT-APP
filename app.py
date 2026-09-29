@@ -4,6 +4,7 @@ from extensions import db, login_mgr, bcrypt, socketio
 from routes.auth import auth_bp
 from routes.chat import chat_bp
 from routes.push import push_bp
+from routes.admin import admin_bp
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -34,6 +35,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(push_bp)
+    app.register_blueprint(admin_bp)
 
     @app.route("/")
     def index():
