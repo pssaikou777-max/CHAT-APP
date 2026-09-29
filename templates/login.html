@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}ログイン — FreeChat{% endblock %}
+{% block body %}
+<div class="auth-wrap">
+  <div class="auth-logo">💬 FreeChat</div>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div class="flash flash-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form class="auth-form" method="post" action="{{ url_for('auth.login') }}">
+    <input class="input" type="text"     name="user_id"  placeholder="ID" required autocomplete="username">
+    <input class="input" type="password" name="password" placeholder="パスワード" required autocomplete="current-password">
+    <button class="btn-primary" type="submit">ログイン</button>
+  </form>
+
+  <p class="auth-link">アカウントをお持ちでない方は
+    <a href="{{ url_for('auth.register') }}">新規登録</a>
+  </p>
+</div>
+{% endblock %}

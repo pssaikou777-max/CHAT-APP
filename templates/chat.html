@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}{{ partner.nickname }} — FreeChat{% endblock %}
+{% block body %}
+<div class="chat-wrap">
+
+  <!-- ヘッダー -->
+  <header class="chat-bar">
+    <button class="btn-back" onclick="history.back()">‹</button>
+    <div class="chat-bar__avatar">{{ partner.nickname[0] }}</div>
+    <span class="chat-bar__name">{{ partner.nickname }}</span>
+  </header>
+
+  <!-- メッセージエリア -->
+  <div class="msg-area" id="msgArea"></div>
+
+  <!-- 入力欄 -->
+  <div class="input-bar">
+    <input id="msgInput" class="msg-input" type="text" placeholder="メッセージを入力..." maxlength="500">
+    <button class="btn-send" id="sendBtn">送信</button>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ME         = {{ current_user.id }};
+const PARTNER_ID = {{ partner.id }};
+
+const socket = io();
+socket.emit("join", { my_id: ME, partner_id: PARTNER_ID });
+
+// ── 日時フォーマット ─────────────────────────────
+function formatTime(isoStr) {
+  const d   = new Date(isoStr);
+  const now = new Date();
+  const hh  = String(d.getHours()).padStart(2, "0");
+  const mm  = String(d.getMinutes()).padStart(2, "0");
+  const time = `${hh}:${mm}`;
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today - msgDay) / 86400000);
+
+  if (diffDays === 0) return time;
+  if (diffDays === 1) return `昨日 ${time}`;
+  if (diffDays < 7)  return `${["日","月","火","水","木","金","土"][d.getDay()]}曜 ${time}`;
+  return `${d.getMonth()+1}/${d.getDate()} ${time}`;
+}
+
+// ── メッセージDOM生成 ─────────────────────────────
+function appendMsg(m) {
+  const area   = document.getElementById("msgArea");
+  const isMine = m.sender_id === ME;
+  const timeStr = formatTime(m.created_at);
+  const readMark = isMine
+    ? `<span class="read-mark" id="read-${m.id}">${m.is_read ? '<span class="read-done">既読</span>' : ''}</span>`
+    : "";
+
+  area.insertAdjacentHTML("beforeend", `
+    <div class="msg-row ${isMine ? "mine" : "theirs"}" data-id="${m.id}">
+      ${isMine ? readMark : ""}
+      <div class="msg-meta ${isMine ? "meta-mine" : "meta-theirs"}">
+        <span class="msg-time">${timeStr}</span>
+      </div>
+      <div class="bubble">${escHtml(m.body)}</div>
+      ${!isMine ? readMark : ""}
+    </div>`);
+}
+
+function scrollBottom() {
+  const area = document.getElementById("msgArea");
+  area.scrollTop = area.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── 既存メッセージ取得 ────────────────────────────
+async function loadMessages() {
+  const res  = await fetch(`/api/messages/${PARTNER_ID}`);
+  const data = await res.json();
+  data.forEach(appendMsg);
+  scrollBottom();
+  // 画面を開いた時点で相手メッセージを既読にする
+  socket.emit("read_messages", { reader_id: ME, sender_id: PARTNER_ID });
+}
+
+// ── 送信 ─────────────────────────────────────────
+function sendMessage() {
+  const input = document.getElementById("msgInput");
+  const body  = input.value.trim();
+  if (!body) return;
+  socket.emit("send_message", { sender_id: ME, receiver_id: PARTNER_ID, body });
+  input.value = "";
+}
+
+document.getElementById("sendBtn").addEventListener("click", sendMessage);
+document.getElementById("msgInput").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// ── リアルタイム受信 ──────────────────────────────
+socket.on("new_message", m => {
+  appendMsg(m);
+  scrollBottom();
+  // 自分宛なら即既読送信
+  if (m.receiver_id === ME) {
+    socket.emit("read_messages", { reader_id: ME, sender_id: PARTNER_ID });
+  }
+});
+
+// ── 既読イベント受信（自分の送信メッセージに既読マーク） ──
+socket.on("messages_read", data => {
+  // 自分が送ったメッセージすべての read-mark を「既読」に更新
+  document.querySelectorAll(".read-mark").forEach(el => {
+    if (el.innerHTML === "") {
+      el.innerHTML = '<span class="read-done">既読</span>';
+    }
+  });
+});
+
+loadMessages();
+</script>
+{% endblock %}

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: freechat
+    env: python
+    region: singapore        # 日本から最も近いリージョン
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --workers 1 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true  # Render が自動生成
+      - key: RENDER
+        value: "true"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+databases:
+  - name: freechat-db
+    databaseName: freechat
+    plan: free
+    region: singapore

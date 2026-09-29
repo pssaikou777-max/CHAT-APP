@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}友達 — FreeChat{% endblock %}
+{% block body %}
+<div class="app-wrap">
+
+  <!-- ヘッダー -->
+  <header class="top-bar">
+    <span class="top-bar__title">友達</span>
+    <span class="top-bar__me" id="meNickname"></span>
+  </header>
+
+  <!-- 検索 -->
+  <div class="search-box">
+    <input id="searchInput" class="search-input" type="text" placeholder="🔍 IDまたはニックネームで検索">
+    <button class="btn-search" id="searchBtn">検索</button>
+  </div>
+
+  <!-- 検索結果 -->
+  <div id="searchResults" class="list-section hidden">
+    <div class="list-label">検索結果</div>
+    <ul id="searchList" class="user-list"></ul>
+  </div>
+
+  <!-- 友達申請受信 -->
+  <div id="pendingSection" class="list-section hidden">
+    <div class="list-label">友達申請</div>
+    <ul id="pendingList" class="user-list"></ul>
+  </div>
+
+  <!-- 友達一覧 -->
+  <div class="list-section">
+    <div class="list-label">友達一覧</div>
+    <ul id="friendList" class="user-list">
+      <li class="empty-msg">友達がいません。検索して追加しましょう！</li>
+    </ul>
+  </div>
+
+  <!-- ボトムナビ -->
+  <nav class="bottom-nav">
+    <a class="nav-item active" href="{{ url_for('chat.friends') }}">
+      <span class="nav-icon">👥</span><span class="nav-label">友達</span>
+    </a>
+    <a class="nav-item" href="{{ url_for('chat.talks') }}">
+      <span class="nav-icon">💬</span><span class="nav-label">トーク</span>
+    </a>
+    <a class="nav-item" href="{{ url_for('auth.logout') }}">
+      <span class="nav-icon">⚙️</span><span class="nav-label">設定</span>
+    </a>
+  </nav>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ME = {{ current_user.id }};
+const ME_NICK = "{{ current_user.nickname }}";
+document.getElementById("meNickname").textContent = ME_NICK;
+
+// 友達一覧読み込み
+async function loadFriends() {
+  const res  = await fetch("/api/friends");
+  const data = await res.json();
+  const ul   = document.getElementById("friendList");
+  if (!data.length) return;
+  ul.innerHTML = "";
+  data.forEach(u => {
+    ul.insertAdjacentHTML("beforeend", friendItem(u));
+  });
+}
+
+// 申請受信一覧
+async function loadPending() {
+  const res  = await fetch("/api/friends/pending");
+  const data = await res.json();
+  const sec  = document.getElementById("pendingSection");
+  const ul   = document.getElementById("pendingList");
+  if (!data.length) { sec.classList.add("hidden"); return; }
+  sec.classList.remove("hidden");
+  ul.innerHTML = "";
+  data.forEach(u => {
+    ul.insertAdjacentHTML("beforeend", `
+      <li class="user-item">
+        <div class="user-avatar">${u.nickname[0]}</div>
+        <div class="user-info">
+          <span class="user-name">${u.nickname}</span>
+          <span class="user-id">ID: ${u.user_id}</span>
+        </div>
+        <button class="btn-accept" onclick="acceptFriend(${u.id})">承認</button>
+      </li>`);
+  });
+}
+
+// 検索
+document.getElementById("searchBtn").addEventListener("click", async () => {
+  const q   = document.getElementById("searchInput").value.trim();
+  if (!q) return;
+  const res  = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
+  const sec  = document.getElementById("searchResults");
+  const ul   = document.getElementById("searchList");
+  sec.classList.remove("hidden");
+  if (!data.length) {
+    ul.innerHTML = `<li class="empty-msg">見つかりませんでした</li>`;
+    return;
+  }
+  ul.innerHTML = "";
+  data.forEach(u => {
+    let btn = "";
+    if (u.friend_status === "accepted") {
+      btn = `<button class="btn-chat" onclick="location.href='/chat/${u.id}'">トーク</button>`;
+    } else if (u.friend_status === "pending") {
+      btn = `<span class="badge-pending">申請中</span>`;
+    } else {
+      btn = `<button class="btn-add" onclick="addFriend(${u.id}, this)">追加</button>`;
+    }
+    ul.insertAdjacentHTML("beforeend", `
+      <li class="user-item">
+        <div class="user-avatar">${u.nickname[0]}</div>
+        <div class="user-info">
+          <span class="user-name">${u.nickname}</span>
+          <span class="user-id">ID: ${u.user_id}</span>
+        </div>
+        ${btn}
+      </li>`);
+  });
+});
+
+// Enterキーでも検索
+document.getElementById("searchInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("searchBtn").click();
+});
+
+async function addFriend(id, btn) {
+  await fetch(`/api/friends/request/${id}`, { method: "POST" });
+  btn.outerHTML = `<span class="badge-pending">申請中</span>`;
+}
+
+async function acceptFriend(id) {
+  await fetch(`/api/friends/accept/${id}`, { method: "POST" });
+  loadPending();
+  loadFriends();
+}
+
+function friendItem(u) {
+  return `<li class="user-item" onclick="location.href='/chat/${u.id}'">
+    <div class="user-avatar">${u.nickname[0]}</div>
+    <div class="user-info">
+      <span class="user-name">${u.nickname}</span>
+      <span class="user-id">ID: ${u.user_id}</span>
+    </div>
+    <span class="nav-chevron">›</span>
+  </li>`;
+}
+
+loadFriends();
+loadPending();
+</script>
+{% endblock %}
