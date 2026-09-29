@@ -13,7 +13,8 @@
 3. [GitHubでリポジトリを作成](#3-githubでリポジトリを作成)
 4. [ローカルプロジェクトをGitHubに登録](#4-ローカルプロジェクトをgithubに登録)
 5. [今後のコード更新手順](#5-今後のコード更新手順)
-6. [プロジェクト情報](#6-プロジェクト情報)
+6. [Renderでインターネット公開（デプロイ）](#6-renderでインターネット公開デプロイ)
+7. [プロジェクト情報](#7-プロジェクト情報)
 
 ---
 
@@ -171,13 +172,100 @@ git push
 
 ---
 
-## 6. プロジェクト情報
+## 6. Renderでインターネット公開（デプロイ）
+
+他のユーザーがブラウザからアクセスできるようにするには、Render（無料クラウドサーバー）にデプロイする。
+
+### 6-1. Renderアカウント作成
+
+1. 👉 **[https://render.com](https://render.com)** を開く
+2. **「Get Started for Free」** をクリック
+3. **「GitHub でログイン」** を選択
+4. GitHubの認証を許可する
+
+---
+
+### 6-2. GitHubとの連携
+
+1. 👉 **[https://github.com/apps/render](https://github.com/apps/render)** を開く
+2. **「Configure」** をクリック
+3. アカウント **「pssaikou777-max」** を選択
+4. **「Only select repositories」** → **「CHAT-APP」** を選択
+5. **「Save」** をクリック
+
+---
+
+### 6-3. Web Serviceの作成
+
+1. 👉 **[https://dashboard.render.com/web/new](https://dashboard.render.com/web/new)** を開く
+2. **「New Web Service」** をクリック
+3. **「pssaikou777-max / CHAT-APP」** を選択して **「Connect」** をクリック
+
+---
+
+### 6-4. サービスの設定
+
+以下の内容を確認・入力する：
+
+| 項目 | 設定値 |
+|------|--------|
+| Name | `CHAT-APP` |
+| Region | `Singapore（Southeast Asia）` |
+| Branch | `main` |
+| Root Directory | **空白（何も入力しない）** ← 重要 |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `gunicorn wsgi:app --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --workers 1 --bind 0.0.0.0:$PORT` |
+| Plan | **Free（$0/month）** |
+
+> ⚠️ **Root Directory は必ず空白にすること**
+> `free_chat_app` と入力するとビルドエラーになる
+
+**「Deploy web service」** をクリック
+
+---
+
+### 6-5. ビルド完了の確認
+
+ログに以下が表示されれば成功：
+
+```
+==> Your service is live 🎉
+```
+
+公開URLはこちら：
+👉 **[https://chat-app-4pnu.onrender.com](https://chat-app-4pnu.onrender.com)**
+
+---
+
+### 6-6. トラブルシューティング（Render）
+
+#### ❌ Root directory does not exist
+→ Settingsで **Root Directory を空白** に変更して再デプロイ
+
+#### ❌ Failed to build 'gevent'
+→ `requirements.txt` の `gevent` バージョンを `24.11.1` に変更してプッシュ：
+```cmd
+cd C:\Users\user\.bob\playground\free_chat_app
+git add requirements.txt
+git commit -m "fix: geventを24.11.1に更新"
+git push
+```
+
+#### ⚠️ 無料プランの注意事項
+- 一定時間アクセスがないと **スリープ状態**になる
+- 再アクセス時に **最大50秒** の待ち時間が発生する
+- 常時起動が必要な場合は有料プラン（$7/month）へアップグレード
+
+---
+
+## 7. プロジェクト情報
 
 | 項目 | 内容 |
 |------|------|
 | プロジェクト名 | 無料チャットアプリ |
 | ローカルフォルダ | `C:\Users\user\.bob\playground\free_chat_app` |
 | GitHubリポジトリURL | https://github.com/pssaikou777-max/CHAT-APP |
+| 公開URL（Render） | https://chat-app-4pnu.onrender.com |
 | ブランチ | `main` |
 | 開発言語 | Python（Flask / FastAPI） |
 | Phase 1 | Python Webアプリ |
