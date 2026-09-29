@@ -3,6 +3,7 @@ from flask import Flask, redirect, url_for
 from extensions import db, login_mgr, bcrypt, socketio
 from routes.auth import auth_bp
 from routes.chat import chat_bp
+from routes.push import push_bp
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -32,6 +33,7 @@ def create_app():
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(chat_bp)
+    app.register_blueprint(push_bp)
 
     @app.route("/")
     def index():
@@ -73,6 +75,16 @@ def on_send_message(data):
 
     room = _room_name(sender_id, receiver_id)
     emit("new_message", msg.to_dict(), to=room)
+
+    # Web Push通知（受信者がチャット画面を開いていない場合も届く）
+    sender = User.query.get(sender_id)
+    from routes.push import send_push
+    send_push(
+        user_id=receiver_id,
+        title=f"{sender.nickname} からメッセージ",
+        body=body[:80],
+        url=f"/chat/{sender_id}",
+    )
 
 
 @socketio.on("read_messages")

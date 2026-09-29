@@ -53,3 +53,31 @@ self.addEventListener("fetch", event => {
     fetch(event.request).catch(() => caches.match(event.request))
   );
 });
+
+// ── Web Push通知受信 ──────────────────────────────
+self.addEventListener("push", event => {
+  if (!event.data) return;
+  const data = event.data.json();
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body:  data.body,
+      icon:  "/static/icons/icon-192.png",
+      badge: "/static/icons/icon-192.png",
+      data:  { url: data.url || "/" },
+    })
+  );
+});
+
+// 通知タップでチャット画面を開く
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const url = event.notification.data.url;
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      for (const client of list) {
+        if (client.url.includes(url) && "focus" in client) return client.focus();
+      }
+      return clients.openWindow(url);
+    })
+  );
+});

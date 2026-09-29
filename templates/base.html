@@ -18,9 +18,34 @@
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block scripts %}{% endblock %}
 <script>
-if ('serviceWorker' in navigator) {
+// Service Worker登録 & Web Push購読
+if ('serviceWorker' in navigator && 'PushManager' in window) {
   navigator.serviceWorker.register('/static/sw.js', { scope: '/' })
-    .catch(e => console.warn('SW registration failed:', e));
+    .then(async reg => {
+      // VAPID公開鍵を取得
+      const res    = await fetch('/api/push/vapid-public-key');
+      const { publicKey } = await res.json();
+      if (!publicKey) return;
+
+      // 既存の購読を確認
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        // 通知許可を要求
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: publicKey,
+        });
+      }
+      // サーバーに登録
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub.toJSON()),
+      });
+    })
+    .catch(e => console.warn('SW/Push error:', e));
 }
 </script>
 </body>
