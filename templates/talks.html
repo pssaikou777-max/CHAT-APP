@@ -7,6 +7,13 @@
     <span class="top-bar__title">トーク</span>
   </header>
 
+  <!-- 通知バナー（未許可 or 未購読のときのみ表示） -->
+  <div class="push-banner" id="pushBanner" style="display:none">
+    <span class="push-banner__text">🔔 メッセージ通知を受け取りますか？</span>
+    <button class="push-banner__btn" id="pushEnableBtn">有効にする</button>
+    <button class="push-banner__close" id="pushBannerClose">✕</button>
+  </div>
+
   <ul id="talkList" class="talk-list">
     <li class="empty-msg" id="emptyMsg">まだトークがありません</li>
   </ul>
@@ -27,6 +34,41 @@
 
 {% block scripts %}
 <script>
+// ── 通知バナー制御 ────────────────────────────────
+(async function initPushBanner() {
+  // Service Worker / PushManager 非対応なら非表示
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+  // 既に許可済みなら非表示
+  if (Notification.permission === 'granted') {
+    // 購読が実際に登録されているか確認し、なければ静かに再登録
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) await window.requestPushPermission();
+    } catch(_) {}
+    return;
+  }
+
+  // 「もう表示しない」を選んだ場合はスキップ
+  if (localStorage.getItem('pushBannerDismissed') === '1') return;
+
+  document.getElementById('pushBanner').style.display = 'flex';
+
+  document.getElementById('pushEnableBtn').addEventListener('click', async () => {
+    document.getElementById('pushBanner').style.display = 'none';
+    const result = await window.requestPushPermission();
+    if (result === 'not-standalone') {
+      alert('📱 通知を受け取るには、まずこのページをホーム画面に追加してから、ホーム画面のアイコンから開いてください。');
+    }
+  });
+
+  document.getElementById('pushBannerClose').addEventListener('click', () => {
+    document.getElementById('pushBanner').style.display = 'none';
+    localStorage.setItem('pushBannerDismissed', '1');
+  });
+})();
+
 async function loadTalks() {
   const res  = await fetch("/api/talks");
   const data = await res.json();

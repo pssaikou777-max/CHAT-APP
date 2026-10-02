@@ -56,14 +56,28 @@ self.addEventListener("fetch", event => {
 
 // ── Web Push通知受信 ──────────────────────────────
 self.addEventListener("push", event => {
-  if (!event.data) return;
-  const data = event.data.json();
+  // iOS: event.data が null でも showNotification を必ず呼ぶ（呼ばないとエラー）
+  let title = "FreeChat";
+  let body  = "新しいメッセージがあります";
+  let url   = "/";
+
+  if (event.data) {
+    try {
+      const d = event.data.json();
+      title = d.title || title;
+      body  = d.body  || body;
+      url   = d.url   || url;
+    } catch(_) {
+      body = event.data.text() || body;
+    }
+  }
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body:  data.body,
+    self.registration.showNotification(title, {
+      body,
       icon:  "/static/icons/icon-192.png",
       badge: "/static/icons/icon-192.png",
-      data:  { url: data.url || "/" },
+      data:  { url },
     })
   );
 });

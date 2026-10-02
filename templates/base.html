@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#1a1a1a">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="FreeChat">
@@ -18,35 +19,51 @@
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block scripts %}{% endblock %}
 <script>
-// Service Worker登録 & Web Push購読
-if ('serviceWorker' in navigator && 'PushManager' in window) {
+// ── Service Worker 登録（常時）───────────────────────
+if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/static/sw.js', { scope: '/' })
-    .then(async reg => {
-      // VAPID公開鍵を取得
-      const res    = await fetch('/api/push/vapid-public-key');
-      const { publicKey } = await res.json();
-      if (!publicKey) return;
-
-      // 既存の購読を確認
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub) {
-        // 通知許可を要求
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') return;
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: publicKey,
-        });
-      }
-      // サーバーに登録
-      await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sub.toJSON()),
-      });
-    })
-    .catch(e => console.warn('SW/Push error:', e));
+    .catch(e => console.warn('SW register error:', e));
 }
+
+// ── Web Push 購読（ユーザー操作時に呼ぶ関数として公開）──
+// iOS Safari: standalone モード + ユーザータップ中のみ requestPermission が許可される
+window.requestPushPermission = async function() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
+
+  // iOS: ホーム画面アプリ（standalone）以外は購読不可
+  const isStandalone = window.navigator.standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !isStandalone) {
+    return 'not-standalone';
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const res = await fetch('/api/push/vapid-public-key');
+    const { publicKey } = await res.json();
+    if (!publicKey) return 'no-key';
+
+    // 既存の購読があればそのまま再登録
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return 'denied';
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: publicKey,
+      });
+    }
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub.toJSON()),
+    });
+    return 'ok';
+  } catch(e) {
+    console.warn('Push subscribe error:', e);
+    return 'error';
+  }
+};
 </script>
 </body>
 </html>
